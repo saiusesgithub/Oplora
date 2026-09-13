@@ -10,6 +10,7 @@ from agent.models import ApplicationApprovalRequest, Opportunity, OpportunitySco
 
 logger = logging.getLogger(__name__)
 _saved: dict[str, SavedOpportunity] = {}
+_evaluated: dict[str, tuple[Opportunity, OpportunityScore]] = {}
 _lock = Lock()
 
 
@@ -18,19 +19,37 @@ def saved_opportunities() -> list[SavedOpportunity]:
         return list(_saved.values())
 
 
-@tool
-def save_opportunity(opportunity: dict, score: dict | None = None) -> dict:
-    """Save a strong opportunity in memory. Call only for HIGH recommendations."""
-    parsed_opportunity = Opportunity(**opportunity)
-    parsed_score = OpportunityScore(**score) if score else None
-    if parsed_score is None or parsed_score.recommendation.value != "HIGH":
-        raise ValueError("Only opportunities with a HIGH recommendation may be saved.")
-    saved = SavedOpportunity(opportunity=parsed_opportunity, score=parsed_score)
+def clear_evaluated_opportunities() -> None:
+    """Reset only the current-run registry; saved demo results remain available."""
     with _lock:
-        _saved[parsed_opportunity.id] = saved
-    logger.info("Saved opportunity %s", parsed_opportunity.id)
-    run_state.record("OPPORTUNITY_SAVED", f"Saved {parsed_opportunity.title}", saved=1)
-    return {"saved": True, "opportunity_id": parsed_opportunity.id}
+        _evaluated.clear()
+
+
+def register_evaluated_opportunity(opportunity: Opportunity, score: OpportunityScore) -> None:
+    with _lock:
+        _evaluated[opportunity.id] = (opportunity, score)
+
+
+@tool
+def save_opportunity(opportunity_id: str) -> dict:
+    """Save one previously evaluated HIGH opportunity by its ID.
+
+    Pass only the opportunity_id returned by score_opportunity. Unknown IDs and non-HIGH
+    opportunities return an error result rather than raising. Do not retry an error more than once.
+    """
+    with _lock:
+        evaluated = _evaluated.get(opportunity_id)
+        if evaluated is None:
+            return {"success": False, "error": "Unknown opportunity_id"}
+        opportunity, score = evaluated
+        if score.recommendation.value != "HIGH":
+            return {"success": False, "error": "Only HIGH opportunities may be saved"}
+        if opportunity_id in _saved:
+            return {"success": True, "opportunity_id": opportunity_id, "message": "Opportunity already saved"}
+        _saved[opportunity_id] = SavedOpportunity(opportunity=opportunity, score=score)
+    logger.info("Saved opportunity %s", opportunity_id)
+    run_state.record("OPPORTUNITY_SAVED", f"Saved {opportunity.title}", saved=1)
+    return {"success": True, "opportunity_id": opportunity_id, "message": "Opportunity saved"}
 
 
 @tool

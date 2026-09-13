@@ -2,6 +2,7 @@ from strands import tool
 
 from agent.discovery.activity import run_state
 from agent.models import Opportunity, OpportunityScore, Recommendation
+from agent.tools.applications import register_evaluated_opportunity
 
 
 @tool
@@ -26,5 +27,6 @@ def score_opportunity(
         reasons=reasons,
         warnings=warnings or [],
     )
+    register_evaluated_opportunity(parsed_opportunity, score)
     run_state.record("OPPORTUNITY_SCORED", f"{score.match_score}% match for {parsed_opportunity.title}", evaluated=1)
     return score.model_dump(mode="json")

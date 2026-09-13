@@ -31,8 +31,10 @@ For web results, call deduplicate_opportunities once before scoring. Evaluate ea
 by deciding a score from 0 to 100, HIGH/MEDIUM/LOW recommendation, concise reasons, and warnings;
 then call score_opportunity with that decision. Reason from the user profile and source facts, not
 from assumptions. Strong means HIGH only. Ignore LOW and MEDIUM matches and call save_opportunity only
-for HIGH matches, passing the score returned by score_opportunity. Never claim registration is open
-unless the source explicitly says so. Never apply, register, contact an organizer, or submit user
+for HIGH matches, passing only the opportunity_id returned by score_opportunity. If a tool returns an
+error or validation result, correct its arguments and retry at most once; after that, continue and
+briefly report the failure without exposing tool internals. Never claim registration is open unless
+the source explicitly says so. Never apply, register, contact an organizer, or submit user
 information; request_application_approval only when explicitly asked to start an application. End with
 a short summary of only worthwhile saved matches, including source URLs where available.
 """

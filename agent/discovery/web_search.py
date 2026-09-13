@@ -67,6 +67,15 @@ def get_search_provider() -> SearchProvider | None:
     return None
 
 
+def search_provider_name() -> str:
+    """Return a safe display name without exposing configured credential values."""
+    if os.getenv("TAVILY_API_KEY"):
+        return "Tavily"
+    if os.getenv("BRAVE_SEARCH_API_KEY"):
+        return "Brave"
+    return "none"
+
+
 @tool
 def search_web(query: str, max_results: int = MAX_RESULTS_PER_QUERY) -> dict:
     """Search the web for opportunity pages using a configured provider.
@@ -82,7 +91,7 @@ def search_web(query: str, max_results: int = MAX_RESULTS_PER_QUERY) -> dict:
     run_state.record("DISCOVERY_SEARCH", f"Searching for {query}")
     provider = get_search_provider()
     if provider is None:
-        message = "No search API configured. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY, or use mock mode."
+        message = "No search API configured. Set TAVILY_API_KEY or BRAVE_SEARCH_API_KEY."
         logger.warning(message)
         return {"results": [], "error": message}
     try:
