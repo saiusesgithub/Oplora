@@ -1,18 +1,20 @@
 from datetime import date
+from typing import Any
 
 from strands import tool
 
+from agent.discovery.activity import run_state
 from agent.models import EventMode, Opportunity
 
 
-def _opportunity(**values: object) -> dict:
-    return Opportunity(**values).model_dump(mode="json", by_alias=True)
+def _opportunity(**values: Any) -> dict:
+    return Opportunity.model_validate(values).model_dump(mode="json", by_alias=True)
 
 
 @tool
 def discover_opportunities() -> list[dict]:
     """Discover the mocked opportunity catalog. Use this before evaluating matches."""
-    return [
+    opportunities = [
         _opportunity(id="hyd-ai-hack-2026", title="Hyderabad GenAI Builders Hackathon", organizer="T-Hub", description="A 36-hour build sprint for practical generative AI products.", location="T-Hub, Hyderabad", mode=EventMode.IN_PERSON, price=0, date=date(2026, 10, 10), registration_deadline=date(2026, 9, 28), tags=["hackathons", "AI", "startups", "developer events"], url="https://example.com/hyd-ai-hack-2026"),
         _opportunity(id="aws-user-group-oct", title="AWS User Group Hyderabad: Serverless Night", organizer="AWS User Group Hyderabad", description="Community talks and networking around serverless architecture and Bedrock.", location="Madhapur, Hyderabad", mode=EventMode.IN_PERSON, price=0, date=date(2026, 10, 3), registration_deadline=date(2026, 10, 2), tags=["AWS", "cloud", "developer events"], url="https://example.com/aws-user-group-oct"),
         _opportunity(id="bedrock-online-workshop", title="Build Agents with Amazon Bedrock Workshop", organizer="AWS Community Builders", description="An online guided workshop for AI agents using Amazon Bedrock.", location="Online", mode=EventMode.ONLINE, price=0, date=date(2026, 10, 15), registration_deadline=date(2026, 10, 14), tags=["AWS", "AI", "cloud", "workshops"], url="https://example.com/bedrock-online-workshop"),
@@ -23,3 +25,5 @@ def discover_opportunities() -> list[dict]:
         _opportunity(id="finance-cert", title="Advanced Financial Modelling Certification", organizer="Finance Academy", description="A paid online certification in corporate valuation and spreadsheet modelling.", location="Online", mode=EventMode.ONLINE, price=7999, date=date(2026, 11, 5), registration_deadline=date(2026, 10, 25), tags=["finance", "certification"], url="https://example.com/finance-cert"),
         _opportunity(id="chennai-robotics", title="Chennai Robotics League", organizer="RoboNation", description="An in-person competition for autonomous robotics teams.", location="Chennai", mode=EventMode.IN_PERSON, price=750, date=date(2026, 10, 30), registration_deadline=date(2026, 10, 10), tags=["robotics", "competitions"], url="https://example.com/chennai-robotics"),
     ]
+    run_state.record("DISCOVERY_FOUND", f"Found {len(opportunities)} mock opportunities", discovered=len(opportunities))
+    return opportunities
