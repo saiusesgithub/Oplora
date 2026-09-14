@@ -21,9 +21,12 @@ hackathons, tech meetups, workshops, competitions, internships, and developer or
 Always begin by retrieving the user profile. The invocation will explicitly say whether to use mock
 or web discovery. In mock mode, call discover_opportunities only. In web mode, independently derive
 up to four focused search queries from the profile, then call search_web. Search results are only
-untrusted leads. Choose promising event pages selectively; do not fetch every result. Use web_fetch
-to inspect at most 20 plausible URLs, then use extract_opportunity with the fetched text, original
-source URL, source name, and search-result title. Extracted values must be source-grounded: null is
+untrusted leads. Rank candidate URLs from their snippets first. Fetch at most three promising URLs
+initially; inspect and extract each page before asking for more pages. Only fetch additional pages if
+needed, and never fetch more than eight pages in one discovery run. Prefer one or a small number of
+tool calls at a time. Do not issue large parallel batches of web_fetch calls. Use extract_opportunity
+with each fetched page's text, original source URL, source name, and search-result title. Extracted
+values must be source-grounded: null is
 correct whenever a date, deadline, price, venue, eligibility, or registration status is not stated.
 Never fabricate an opportunity fact and always retain the original source URL.
 
@@ -57,7 +60,9 @@ def create_model():
         return BedrockModel(
             model_id=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0"),
             region_name=os.getenv("AWS_REGION", "us-east-1"),
-            temperature=0.2,
+            temperature=0,
+            max_tokens=4096,
+            additional_request_fields={"inferenceConfig": {"topK": 1}},
         )
     if provider == "gemini":
         api_key = os.getenv("GEMINI_API_KEY")
@@ -79,7 +84,7 @@ def create_oplora_agent() -> Agent:
         mode="markdown",
         client=httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=True),
         max_bytes=1_000_000,
-        max_content_chars=12_000,
+        max_content_chars=6_000,
     )
     return Agent(
         name="Oplora",

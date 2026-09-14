@@ -22,6 +22,27 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 
+def _is_nova_tool_use_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        "modelstreamerrorexception" in message
+        or "invalid sequence as part of tooluse" in message
+        or "malformed tooluse" in message
+    )
+
+
+def _partial_result_detail() -> dict:
+    stats = run_state.snapshot()
+    return {
+        "message": "Oplora's model failed after one retry; real partial results were preserved.",
+        "discovered": stats["discovered"],
+        "deduplicated": stats["deduplicated"],
+        "evaluated": stats["evaluated"],
+        "saved": stats["saved"],
+        "saved_opportunities": [item.model_dump(mode="json") for item in saved_opportunities()],
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Model provider: %s", model_provider_name())
@@ -61,8 +82,19 @@ async def run_agent(request: AgentRunRequest | None = None) -> AgentRunResponse:
     try:
         result = await run_in_threadpool(app.state.oplora, prompt)
     except Exception as exc:
-        logger.exception("Oplora discovery run failed")
-        raise HTTPException(status_code=502, detail="Oplora could not reach its Bedrock model.") from exc
+        if model_provider_name() == "Bedrock" and _is_nova_tool_use_error(exc):
+            run_state.record("MODEL_RETRY", "Retrying after a Nova tool-use response error")
+            try:
+                result = await run_in_threadpool(
+                    app.state.oplora,
+                    "Continue the current discovery operation from prior tool results. Do not restart searches or use mock data.",
+                )
+            except Exception as retry_exc:
+                logger.warning("Oplora Nova tool-use retry failed")
+                raise HTTPException(status_code=502, detail=_partial_result_detail()) from retry_exc
+        else:
+            logger.warning("Oplora discovery run failed")
+            raise HTTPException(status_code=502, detail="Oplora could not complete its model run.") from exc
     stats = run_state.snapshot()
     return AgentRunResponse(
         response=str(result),

@@ -5,6 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from strands import tool
@@ -12,7 +13,8 @@ from strands import tool
 from agent.discovery.activity import run_state
 
 logger = logging.getLogger(__name__)
-MAX_RESULTS_PER_QUERY = 8
+MAX_RESULTS_PER_QUERY = 6
+MAX_SNIPPET_CHARS = 500
 
 
 @dataclass(frozen=True)
@@ -21,6 +23,19 @@ class SearchResult:
     url: str
     snippet: str | None
     source: str
+    published_date: str | None = None
+
+
+def _compact_result(title: str, url: str, snippet: str | None, published_date: str | None = None) -> SearchResult:
+    """Expose only compact, fetch-decision metadata to the model."""
+    compact_snippet = " ".join((snippet or "").split())[:MAX_SNIPPET_CHARS] or None
+    return SearchResult(
+        title=" ".join(title.split())[:300],
+        url=url,
+        snippet=compact_snippet,
+        source=urlsplit(url).netloc.lower(),
+        published_date=published_date,
+    )
 
 
 class SearchProvider(ABC):
@@ -40,7 +55,11 @@ class TavilySearchProvider(SearchProvider):
             timeout=10.0,
         )
         response.raise_for_status()
-        return [SearchResult(title=item.get("title", ""), url=item["url"], snippet=item.get("content"), source="tavily") for item in response.json().get("results", []) if item.get("url")]
+        return [
+            _compact_result(item.get("title", ""), item["url"], item.get("content"), item.get("published_date"))
+            for item in response.json().get("results", [])
+            if item.get("url")
+        ]
 
 
 class BraveSearchProvider(SearchProvider):
@@ -56,7 +75,11 @@ class BraveSearchProvider(SearchProvider):
         )
         response.raise_for_status()
         items: list[dict[str, Any]] = response.json().get("web", {}).get("results", [])
-        return [SearchResult(title=item.get("title", ""), url=item["url"], snippet=item.get("description"), source="brave") for item in items if item.get("url")]
+        return [
+            _compact_result(item.get("title", ""), item["url"], item.get("description"), item.get("age"))
+            for item in items
+            if item.get("url")
+        ]
 
 
 def get_search_provider() -> SearchProvider | None:
