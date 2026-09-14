@@ -26,6 +26,25 @@ $env:TAVILY_API_KEY = "..."
 uvicorn agent.main:app --reload
 ```
 
+## Model providers
+
+Bedrock is the default and continues to use `AWS_REGION` plus the optional `BEDROCK_MODEL_ID`.
+
+```powershell
+$env:OPLORA_MODEL_PROVIDER = "bedrock"
+```
+
+To use Gemini with the same Oplora agent and tools, configure a Gemini API key. The default model is `gemini-2.5-flash`.
+
+```powershell
+$env:OPLORA_MODEL_PROVIDER = "gemini"
+$env:GEMINI_API_KEY = "..."
+# Optional
+$env:GEMINI_MODEL_ID = "gemini-2.5-flash"
+```
+
+The server fails at startup with a clear error if Gemini is selected without `GEMINI_API_KEY`. Startup logs show the provider name only; credentials are never logged.
+
 Open `http://127.0.0.1:8000/docs` for interactive API documentation.
 
 ## Endpoints

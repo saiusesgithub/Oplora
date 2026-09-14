@@ -12,7 +12,7 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=F
 from fastapi import FastAPI, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from agent.agent import create_oplora_agent
+from agent.agent import create_oplora_agent, model_provider_name
 from agent.discovery.activity import run_state
 from agent.discovery.web_search import get_search_provider, search_provider_name
 from agent.models import AgentRunRequest, AgentRunResponse, SavedOpportunity
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Model provider: %s", model_provider_name())
     logger.info("Search provider: %s", search_provider_name())
     app.state.oplora = create_oplora_agent()
     yield

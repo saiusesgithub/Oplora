@@ -40,12 +40,41 @@ a short summary of only worthwhile saved matches, including source URLs where av
 """
 
 
+def model_provider_name() -> str:
+    """Return the configured provider name without exposing credentials."""
+    provider = os.getenv("OPLORA_MODEL_PROVIDER", "bedrock").lower()
+    if provider == "bedrock":
+        return "Bedrock"
+    if provider == "gemini":
+        return "Gemini"
+    raise ValueError("OPLORA_MODEL_PROVIDER must be 'bedrock' or 'gemini'.")
+
+
+def create_model():
+    """Create the configured Strands model provider without issuing an inference request."""
+    provider = os.getenv("OPLORA_MODEL_PROVIDER", "bedrock").lower()
+    if provider == "bedrock":
+        return BedrockModel(
+            model_id=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0"),
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
+            temperature=0.2,
+        )
+    if provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is required when OPLORA_MODEL_PROVIDER=gemini.")
+        from strands.models.gemini import GeminiModel
+
+        return GeminiModel(
+            client_args={"api_key": api_key},
+            model_id=os.getenv("GEMINI_MODEL_ID", "gemini-2.5-flash"),
+            params={"temperature": 0.2},
+        )
+    raise ValueError("OPLORA_MODEL_PROVIDER must be 'bedrock' or 'gemini'.")
+
+
 def create_oplora_agent() -> Agent:
-    model = BedrockModel(
-        model_id=os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0"),
-        region_name=os.getenv("AWS_REGION", "us-east-1"),
-        temperature=0.2,
-    )
+    model = create_model()
     web_fetch = make_web_fetch(
         mode="markdown",
         client=httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=True),
