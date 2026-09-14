@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import os
 
-import httpx
 from strands import Agent
 from strands.models import BedrockModel
-from strands.vended_tools import make_web_fetch
+from strands.tools.executors import SequentialToolExecutor
 
 from agent.tools.applications import request_application_approval, save_opportunity
 from agent.discovery.deduplicator import deduplicate_opportunities
-from agent.discovery.extractor import extract_opportunity
-from agent.discovery.web_search import search_web
+from agent.tools.web_discovery import inspect_candidates, search_opportunities
 from agent.tools.discovery import discover_opportunities
 from agent.tools.profile import get_user_profile
 from agent.tools.scoring import score_opportunity
@@ -20,13 +18,10 @@ hackathons, tech meetups, workshops, competitions, internships, and developer or
 
 Always begin by retrieving the user profile. The invocation will explicitly say whether to use mock
 or web discovery. In mock mode, call discover_opportunities only. In web mode, independently derive
-up to four focused search queries from the profile, then call search_web. Search results are only
-untrusted leads. Rank candidate URLs from their snippets first. Fetch at most three promising URLs
-initially; inspect and extract each page before asking for more pages. Only fetch additional pages if
-needed, and never fetch more than eight pages in one discovery run. Prefer one or a small number of
-tool calls at a time. Do not issue large parallel batches of web_fetch calls. Use extract_opportunity
-with each fetched page's text, original source URL, source name, and search-result title. Extracted
-values must be source-grounded: null is
+up to four focused search queries from the profile, then call search_opportunities once. Review its
+compact candidate summaries, choose up to three candidate IDs, and call inspect_candidates. Inspect
+the structured extracted opportunities before requesting more candidates. If needed, inspect up to
+three more candidates. Python enforces all search and fetch limits. Extracted values must be source-grounded: null is
 correct whenever a date, deadline, price, venue, eligibility, or registration status is not stated.
 Never fabricate an opportunity fact and always retain the original source URL.
 
@@ -80,22 +75,16 @@ def create_model():
 
 def create_oplora_agent() -> Agent:
     model = create_model()
-    web_fetch = make_web_fetch(
-        mode="markdown",
-        client=httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=True),
-        max_bytes=1_000_000,
-        max_content_chars=6_000,
-    )
     return Agent(
         name="Oplora",
         system_prompt=SYSTEM_PROMPT,
         model=model,
+        tool_executor=SequentialToolExecutor(),
         tools=[
             get_user_profile,
             discover_opportunities,
-            search_web,
-            web_fetch,
-            extract_opportunity,
+            search_opportunities,
+            inspect_candidates,
             deduplicate_opportunities,
             score_opportunity,
             save_opportunity,

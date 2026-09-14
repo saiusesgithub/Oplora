@@ -24,9 +24,16 @@ class SearchResult:
     snippet: str | None
     source: str
     published_date: str | None = None
+    relevance: float = 0.0
 
 
-def _compact_result(title: str, url: str, snippet: str | None, published_date: str | None = None) -> SearchResult:
+def _compact_result(
+    title: str,
+    url: str,
+    snippet: str | None,
+    published_date: str | None = None,
+    relevance: float = 0.0,
+) -> SearchResult:
     """Expose only compact, fetch-decision metadata to the model."""
     compact_snippet = " ".join((snippet or "").split())[:MAX_SNIPPET_CHARS] or None
     return SearchResult(
@@ -35,6 +42,7 @@ def _compact_result(title: str, url: str, snippet: str | None, published_date: s
         snippet=compact_snippet,
         source=urlsplit(url).netloc.lower(),
         published_date=published_date,
+        relevance=float(relevance or 0.0),
     )
 
 
@@ -56,7 +64,7 @@ class TavilySearchProvider(SearchProvider):
         )
         response.raise_for_status()
         return [
-            _compact_result(item.get("title", ""), item["url"], item.get("content"), item.get("published_date"))
+            _compact_result(item.get("title", ""), item["url"], item.get("content"), item.get("published_date"), item.get("score", 0.0))
             for item in response.json().get("results", [])
             if item.get("url")
         ]

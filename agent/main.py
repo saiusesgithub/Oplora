@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 from agent.agent import create_oplora_agent, model_provider_name
 from agent.discovery.activity import run_state
+from agent.discovery.state import discovery_state
 from agent.discovery.web_search import get_search_provider, search_provider_name
 from agent.models import AgentRunRequest, AgentRunResponse, SavedOpportunity
 from agent.tools.applications import clear_evaluated_opportunities, saved_opportunities
@@ -41,6 +43,11 @@ def _partial_result_detail() -> dict:
         "saved": stats["saved"],
         "saved_opportunities": [item.model_dump(mode="json") for item in saved_opportunities()],
     }
+
+
+def _user_safe_response(value: object) -> str:
+    """Do not surface model tool-reasoning blocks in API responses."""
+    return re.sub(r"<thinking>.*?</thinking>", "", str(value), flags=re.IGNORECASE | re.DOTALL).strip()
 
 
 @asynccontextmanager
@@ -77,6 +84,7 @@ async def run_agent(request: AgentRunRequest | None = None) -> AgentRunResponse:
         )
     prompt = f"Discover the best current opportunities for me and save only strong matches. Use {mode} discovery mode."
     run_state.reset()
+    discovery_state.reset()
     clear_evaluated_opportunities()
     logger.info("Starting Oplora %s discovery run", mode)
     try:
@@ -97,7 +105,7 @@ async def run_agent(request: AgentRunRequest | None = None) -> AgentRunResponse:
             raise HTTPException(status_code=502, detail="Oplora could not complete its model run.") from exc
     stats = run_state.snapshot()
     return AgentRunResponse(
-        response=str(result),
+        response=_user_safe_response(result),
         discovered=stats["discovered"],
         deduplicated=stats["deduplicated"],
         evaluated=stats["evaluated"],
